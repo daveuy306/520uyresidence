@@ -15,27 +15,45 @@ import {
   saveStoredTransactions,
   resetDataToDefaults,
 } from './utils/storage';
-import { RefreshCw } from 'lucide-react';
+import { subscribeToCloudData, saveCloudData } from './utils/firebase';
+import { RefreshCw, CloudCheck, Cloud } from 'lucide-react';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => getAuthStatus());
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'transactions', 'analytics', 'categories'
   const [categories, setCategories] = useState(() => getStoredCategories());
   const [transactions, setTransactions] = useState(() => getStoredTransactions());
+  const [isCloudSynced, setIsCloudSynced] = useState(false);
 
-  // Transaction Modal State
-  const [isTxModalOpen, setIsTxModalOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState(null);
+  // Subscribe to real-time Firebase Cloud Sync across devices
+  useEffect(() => {
+    if (isAuthenticated) {
+      const unsubscribe = subscribeToCloudData((data) => {
+        if (data.categories) {
+          setCategories(data.categories);
+          saveStoredCategories(data.categories);
+        }
+        if (data.transactions) {
+          setTransactions(data.transactions);
+          saveStoredTransactions(data.transactions);
+        }
+        setIsCloudSynced(true);
+      });
+      return () => unsubscribe();
+    }
+  }, [isAuthenticated]);
 
-  // Sync to local storage
+  // Sync to local storage & Firebase cloud
   const handleSaveCategories = (newCategories) => {
     setCategories(newCategories);
     saveStoredCategories(newCategories);
+    saveCloudData(newCategories, transactions);
   };
 
   const handleSaveTransactions = (newTransactions) => {
     setTransactions(newTransactions);
     saveStoredTransactions(newTransactions);
+    saveCloudData(categories, newTransactions);
   };
 
   const handleAuthenticate = () => {
@@ -47,6 +65,10 @@ export default function App() {
     setIsAuthenticated(false);
     setAuthStatus(false);
   };
+
+  // Transaction Modal State
+  const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState(null);
 
   const handleAddOrUpdateTransaction = (txData) => {
     let updated;
@@ -79,6 +101,7 @@ export default function App() {
       const reset = resetDataToDefaults();
       setCategories(reset.categories);
       setTransactions(reset.transactions);
+      saveCloudData(reset.categories, reset.transactions);
     }
   };
 
@@ -99,8 +122,13 @@ export default function App() {
 
           {/* Main Content Area */}
           <main className="flex-1 md:ml-64 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto pb-24 md:pb-12 w-full">
-            {/* Top Toolbar Reset Option */}
-            <div className="flex justify-end mb-4">
+            {/* Top Toolbar Cloud Sync & Reset Option */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-1.5 text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-lg">
+                {isCloudSynced ? <CloudCheck className="w-4 h-4 text-emerald-400" /> : <Cloud className="w-4 h-4 text-indigo-400" />}
+                <span className="font-medium">Firebase Cloud Sync Active</span>
+              </div>
+
               <button
                 onClick={handleResetData}
                 className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition px-2.5 py-1 rounded-lg bg-[#161920] border border-slate-800"
