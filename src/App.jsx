@@ -6,6 +6,7 @@ import TransactionList from './components/TransactionList';
 import CategoriesManager from './components/CategoriesManager';
 import Analytics from './components/Analytics';
 import TransactionModal from './components/TransactionModal';
+import GoogleSheetsModal from './components/GoogleSheetsModal';
 import {
   getAuthStatus,
   setAuthStatus,
@@ -16,7 +17,8 @@ import {
   resetDataToDefaults,
 } from './utils/storage';
 import { subscribeToCloudData, saveCloudData } from './utils/firebase';
-import { RefreshCw, CloudCheck, Cloud } from 'lucide-react';
+import { getAutoSyncSheets, syncToGoogleSheets } from './utils/googleSheets';
+import { RefreshCw, CloudCheck, Cloud, FileSpreadsheet } from 'lucide-react';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => getAuthStatus());
@@ -24,6 +26,7 @@ export default function App() {
   const [categories, setCategories] = useState(() => getStoredCategories());
   const [transactions, setTransactions] = useState(() => getStoredTransactions());
   const [isCloudSynced, setIsCloudSynced] = useState(false);
+  const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
 
   // Subscribe to real-time Firebase Cloud Sync across devices
   useEffect(() => {
@@ -43,7 +46,7 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
-  // Sync to local storage & Firebase cloud
+  // Sync to local storage, Firebase cloud, and optional Google Sheets
   const handleSaveCategories = (newCategories) => {
     setCategories(newCategories);
     saveStoredCategories(newCategories);
@@ -54,6 +57,11 @@ export default function App() {
     setTransactions(newTransactions);
     saveStoredTransactions(newTransactions);
     saveCloudData(categories, newTransactions);
+
+    // Auto-sync to Google Sheets if enabled
+    if (getAutoSyncSheets()) {
+      syncToGoogleSheets(newTransactions, categories).catch(() => {});
+    }
   };
 
   const handleAuthenticate = () => {
@@ -122,16 +130,25 @@ export default function App() {
 
           {/* Main Content Area */}
           <main className="flex-1 md:ml-64 p-4 sm:p-6 md:p-8 max-w-7xl mx-auto pb-24 md:pb-12 w-full">
-            {/* Top Toolbar Cloud Sync & Reset Option */}
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-1.5 text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1 rounded-lg">
-                {isCloudSynced ? <CloudCheck className="w-4 h-4 text-emerald-400" /> : <Cloud className="w-4 h-4 text-indigo-400" />}
-                <span className="font-medium">Firebase Cloud Sync Active</span>
+            {/* Top Toolbar Cloud Sync & Google Sheets Option */}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1.5 rounded-xl">
+                  {isCloudSynced ? <CloudCheck className="w-4 h-4 text-emerald-400" /> : <Cloud className="w-4 h-4 text-indigo-400" />}
+                  <span className="font-medium">Firebase Cloud Sync</span>
+                </div>
+
+                <button
+                  onClick={() => setIsSheetsModalOpen(true)}
+                  className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition px-3 py-1.5 rounded-xl font-medium"
+                >
+                  <FileSpreadsheet className="w-4 h-4" /> Google Sheets
+                </button>
               </div>
 
               <button
                 onClick={handleResetData}
-                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition px-2.5 py-1 rounded-lg bg-[#161920] border border-slate-800"
+                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition px-2.5 py-1.5 rounded-xl bg-[#161920] border border-slate-800"
                 title="Reset sample data"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Reset Demo Data
@@ -176,6 +193,14 @@ export default function App() {
               onClose={() => setIsTxModalOpen(false)}
               onSave={handleAddOrUpdateTransaction}
               editingTransaction={editingTransaction}
+              categories={categories}
+            />
+
+            {/* Google Sheets Modal */}
+            <GoogleSheetsModal
+              isOpen={isSheetsModalOpen}
+              onClose={() => setIsSheetsModalOpen(false)}
+              transactions={transactions}
               categories={categories}
             />
           </main>

@@ -55,7 +55,7 @@ export default function PasscodeModal({ onAuthenticate }) {
 
         <h2 className="text-2xl font-bold text-white tracking-tight">Welcome Back</h2>
         <p className="text-xs text-slate-400 mt-1 mb-6 text-center">
-          Enter passcode <span className="font-mono text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded">uy520</span> to unlock
+          Enter your passcode to unlock
         </p>
 
         {/* Input box */}
@@ -88,7 +88,7 @@ export default function PasscodeModal({ onAuthenticate }) {
           </div>
           {error && (
             <p className="text-xs text-rose-400 mt-2 text-center font-medium animate-bounce">
-              Incorrect passcode. Hint: uy520
+              Incorrect passcode. Please try again.
             </p>
           )}
         </form>
