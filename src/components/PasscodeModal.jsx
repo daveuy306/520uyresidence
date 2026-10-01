@@ -1,27 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, Delete, Eye, EyeOff, ShieldCheck, KeyRound } from 'lucide-react';
+import { Lock, Eye, EyeOff, ShieldCheck, KeyRound } from 'lucide-react';
 import { verifyPasscode } from '../utils/storage';
 
 export default function PasscodeModal({ onAuthenticate }) {
   const [passcode, setPasscode] = useState('');
   const [error, setError] = useState(false);
   const [showPasscode, setShowPasscode] = useState(false);
-
-  const handleKeyPress = (num) => {
-    if (passcode.length < 10) {
-      setError(false);
-      const newCode = passcode + num;
-      setPasscode(newCode);
-      if (newCode === 'uy520') {
-        onAuthenticate();
-      }
-    }
-  };
-
-  const handleDelete = () => {
-    setError(false);
-    setPasscode((prev) => prev.slice(0, -1));
-  };
 
   const handleSubmit = (e) => {
     e?.preventDefault();
@@ -32,13 +16,11 @@ export default function PasscodeModal({ onAuthenticate }) {
     }
   };
 
-  // Allow native keyboard typing for desktop compatibility
+  // Allow native keyboard typing for desktop and mobile touch keyboards
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Enter') {
         handleSubmit();
-      } else if (e.key === 'Backspace') {
-        handleDelete();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -59,7 +41,7 @@ export default function PasscodeModal({ onAuthenticate }) {
         </p>
 
         {/* Input box */}
-        <form onSubmit={handleSubmit} className="w-full mb-6">
+        <form onSubmit={handleSubmit} className="w-full mb-4">
           <div className="relative flex items-center">
             <KeyRound className="absolute left-3.5 text-slate-400 w-5 h-5" />
             <input
@@ -92,41 +74,6 @@ export default function PasscodeModal({ onAuthenticate }) {
             </p>
           )}
         </form>
-
-        {/* On-screen Keypad for Mobile / Quick touch */}
-        <div className="w-full grid grid-cols-3 gap-2.5 mb-2">
-          {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((key) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => handleKeyPress(key)}
-              className="h-12 rounded-xl bg-[#1f2430] hover:bg-[#282f3f] active:bg-indigo-600/30 text-white font-semibold text-lg border border-slate-800/80 transition-all flex items-center justify-center shadow-sm"
-            >
-              {key}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => handleKeyPress('u')}
-            className="h-12 rounded-xl bg-[#1f2430] hover:bg-[#282f3f] text-indigo-300 font-semibold text-base border border-slate-800/80 transition-all flex items-center justify-center"
-          >
-            u
-          </button>
-          <button
-            type="button"
-            onClick={() => handleKeyPress('y')}
-            className="h-12 rounded-xl bg-[#1f2430] hover:bg-[#282f3f] text-indigo-300 font-semibold text-base border border-slate-800/80 transition-all flex items-center justify-center"
-          >
-            y
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="h-12 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-semibold border border-rose-500/20 transition-all flex items-center justify-center"
-          >
-            <Delete className="w-5 h-5" />
-          </button>
-        </div>
 
         {/* Action Button */}
         <button
