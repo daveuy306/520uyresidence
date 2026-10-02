@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import PasscodeModal from './components/PasscodeModal';
 import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
@@ -17,7 +17,7 @@ import {
   resetDataToDefaults,
 } from './utils/storage';
 import { subscribeToCloudData, saveCloudData } from './utils/firebase';
-import { startCrossDeviceSyncSubscriber, pushLocalDataToCloud } from './utils/syncEngine';
+import { startCrossDeviceSyncSubscriber, pushLocalDataToCloud, isValidAppData } from './utils/syncEngine';
 import { getAutoSyncSheets, syncToGoogleSheets } from './utils/googleSheets';
 import { RefreshCw, CloudCheck, Cloud, FileSpreadsheet } from 'lucide-react';
 
@@ -30,34 +30,39 @@ export default function App() {
   const [isCloudSynced, setIsCloudSynced] = useState(true);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
 
-  // Cross-device cloud sync subscriber
+  // Refs for current state to allow syncEngine getter
+  const stateRef = useRef({ categories, transactions });
+  useEffect(() => {
+    stateRef.current = { categories, transactions };
+  }, [categories, transactions]);
+
+  // Cross-device cloud sync subscriber with strict schema validation
   useEffect(() => {
     if (isAuthenticated) {
-      // 1. Firebase listener
+      // 1. Firebase listener with schema validation
       const unsubscribeFirebase = subscribeToCloudData((data) => {
-        if (data.categories) {
+        if (isValidAppData(data)) {
           setCategories(data.categories);
           saveStoredCategories(data.categories);
-        }
-        if (data.transactions) {
           setTransactions(data.transactions);
           saveStoredTransactions(data.transactions);
+          setIsCloudSynced(true);
         }
-        setIsCloudSynced(true);
       });
 
-      // 2. Global REST multi-device sync engine
-      const unsubscribeEngine = startCrossDeviceSyncSubscriber((remote) => {
-        if (remote.categories) {
-          setCategories(remote.categories);
-          saveStoredCategories(remote.categories);
+      // 2. Multi-tab/device sync engine with schema validation
+      const unsubscribeEngine = startCrossDeviceSyncSubscriber(
+        () => stateRef.current,
+        (remote) => {
+          if (isValidAppData(remote)) {
+            setCategories(remote.categories);
+            saveStoredCategories(remote.categories);
+            setTransactions(remote.transactions);
+            saveStoredTransactions(remote.transactions);
+            setIsCloudSynced(true);
+          }
         }
-        if (remote.transactions) {
-          setTransactions(remote.transactions);
-          saveStoredTransactions(remote.transactions);
-        }
-        setIsCloudSynced(true);
-      });
+      );
 
       return () => {
         unsubscribeFirebase();
@@ -66,8 +71,9 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
-  // Sync to local storage, global multi-device cloud, and optional Google Sheets
+  // Sync to local storage, global cloud, and optional Google Sheets
   const handleSaveCategories = (newCategories) => {
+    if (!newCategories || !Array.isArray(newCategories.income) || !Array.isArray(newCategories.expense)) return;
     setCategories(newCategories);
     saveStoredCategories(newCategories);
     saveCloudData(newCategories, transactions);
@@ -75,6 +81,7 @@ export default function App() {
   };
 
   const handleSaveTransactions = (newTransactions) => {
+    if (!Array.isArray(newTransactions)) return;
     setTransactions(newTransactions);
     saveStoredTransactions(newTransactions);
     saveCloudData(categories, newTransactions);

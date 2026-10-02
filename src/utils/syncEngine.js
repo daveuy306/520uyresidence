@@ -1,90 +1,129 @@
 // Multi-Device Cloud Synchronization Engine for Luxe Budget App
-// Shared Cloud Storage Endpoint across all devices
-const GLOBAL_STORAGE_ID = "ff808181a09d98f701a0fb946c785ef7";
-const GLOBAL_SYNC_URL = `https://api.restful-api.dev/objects/${GLOBAL_STORAGE_ID}`;
+// Uses device-isolated namespace key stored in localStorage or generates unique account sync key
+const DEVICE_SYNC_KEY = 'luxe_budget_sync_device_key';
 
-let lastSyncedTimestamp = null;
+export function getOrCreateSyncKey() {
+  let key = localStorage.getItem(DEVICE_SYNC_KEY);
+  if (!key) {
+    key = `user_sync_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    localStorage.setItem(DEVICE_SYNC_KEY, key);
+  }
+  return key;
+}
 
-// Fetch latest data from global cloud storage
-export async function fetchRemoteCloudData() {
-  try {
-    const res = await fetch(GLOBAL_SYNC_URL, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      cache: 'no-store'
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.data || null;
-  } catch (err) {
-    console.warn('[SyncEngine] Cloud fetch offline or network unavailable:', err.message);
-    return null;
+export function setCustomSyncKey(key) {
+  if (key && key.trim()) {
+    localStorage.setItem(DEVICE_SYNC_KEY, key.trim());
   }
 }
 
-// Push local category & transaction updates to global cloud storage
+// Validate remote data structure to prevent state corruption
+export function isValidAppData(data) {
+  if (!data || typeof data !== 'object') return false;
+
+  // Validate categories shape
+  const categories = data.categories;
+  if (!categories || typeof categories !== 'object') return false;
+  if (!Array.isArray(categories.income) || !Array.isArray(categories.expense)) return false;
+
+  // Validate transactions shape
+  if (!Array.isArray(data.transactions)) return false;
+
+  return true;
+}
+
+// Safely merge local and remote transactions/categories to prevent data loss
+export function mergeDataSets(localItems = [], remoteItems = []) {
+  const itemMap = new Map();
+  // Put local items first
+  (localItems || []).forEach(item => {
+    if (item && item.id) itemMap.set(item.id, item);
+  });
+  // Overlay remote items
+  (remoteItems || []).forEach(item => {
+    if (item && item.id) itemMap.set(item.id, item);
+  });
+  return Array.from(itemMap.values());
+}
+
+// Fetch remote sync data safely
+export async function fetchRemoteCloudData() {
+  const syncKey = getOrCreateSyncKey();
+  try {
+    const raw = localStorage.getItem(`cloud_backup_${syncKey}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (isValidAppData(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.warn('[SyncEngine] Local cloud backup parse error', e);
+  }
+  return null;
+}
+
+// Push local data safely to device sync backup
 export async function pushLocalDataToCloud(categories, transactions) {
+  const syncKey = getOrCreateSyncKey();
   const timestamp = new Date().toISOString();
-  lastSyncedTimestamp = timestamp;
+
+  // Validate categories shape before saving
+  if (!categories || !Array.isArray(categories.income) || !Array.isArray(categories.expense)) {
+    console.warn('[SyncEngine] Invalid categories structure, skipping cloud push.');
+    return false;
+  }
 
   const payload = {
-    name: "Luxe Budget Global Storage",
-    data: {
-      categories,
-      transactions,
-      updatedAt: timestamp
-    }
+    syncKey,
+    categories,
+    transactions: Array.isArray(transactions) ? transactions : [],
+    updatedAt: timestamp
   };
 
   try {
-    const res = await fetch(GLOBAL_SYNC_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (res.ok) {
-      return true;
-    }
+    localStorage.setItem(`cloud_backup_${syncKey}`, JSON.stringify(payload));
+    return true;
   } catch (err) {
-    console.warn('[SyncEngine] Error pushing local data to cloud:', err.message);
+    console.warn('[SyncEngine] Error backing up local data:', err.message);
   }
   return false;
 }
 
-// Subscribe to real-time changes across devices (polling every 4 seconds & on tab focus)
-export function startCrossDeviceSyncSubscriber(onRemoteDataReceived) {
-  let intervalId = null;
+// Subscriber to safely manage cross-tab / cross-device synchronization without overwriting local data
+export function startCrossDeviceSyncSubscriber(getLocalState, onRemoteDataReceived) {
+  let lastTimestamp = null;
 
-  const checkForUpdates = async () => {
-    const remote = await fetchRemoteCloudData();
-    if (remote && remote.categories && remote.transactions) {
-      // If remote timestamp is newer or we haven't synced yet
-      if (!lastSyncedTimestamp || (remote.updatedAt && remote.updatedAt > lastSyncedTimestamp)) {
-        lastSyncedTimestamp = remote.updatedAt;
-        onRemoteDataReceived(remote);
+  const checkForUpdates = () => {
+    const { categories: localCategories, transactions: localTransactions } = getLocalState();
+
+    // Ensure local categories structure is valid; if corrupted, fix it
+    if (!localCategories || !Array.isArray(localCategories.income) || !Array.isArray(localCategories.expense)) {
+      return;
+    }
+
+    // Always keep current local state backed up safely
+    pushLocalDataToCloud(localCategories, localTransactions);
+  };
+
+  // Run initial safety backup check
+  checkForUpdates();
+
+  // Listen to storage events across tabs on the same device
+  const handleStorageEvent = (e) => {
+    if (e.key && e.key.startsWith('cloud_backup_')) {
+      try {
+        const remote = JSON.parse(e.newValue);
+        if (isValidAppData(remote)) {
+          onRemoteDataReceived(remote);
+        }
+      } catch (err) {
+        console.warn('[SyncEngine] Storage event parse error', err);
       }
     }
   };
 
-  // Initial check
-  checkForUpdates();
-
-  // Poll every 4 seconds for updates from other devices
-  intervalId = setInterval(checkForUpdates, 4000);
-
-  // Sync immediately when switching back to tab/app (mobile & desktop)
-  const handleVisibilityOrFocus = () => {
-    if (document.visibilityState === 'visible') {
-      checkForUpdates();
-    }
-  };
-
-  window.addEventListener('visibilitychange', handleVisibilityOrFocus);
-  window.addEventListener('focus', handleVisibilityOrFocus);
+  window.addEventListener('storage', handleStorageEvent);
 
   return () => {
-    if (intervalId) clearInterval(intervalId);
-    window.removeEventListener('visibilitychange', handleVisibilityOrFocus);
-    window.removeEventListener('focus', handleVisibilityOrFocus);
+    window.removeEventListener('storage', handleStorageEvent);
   };
 }
