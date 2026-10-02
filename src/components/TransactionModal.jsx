@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, DollarSign, Calendar, Tag, FileText, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
-import { DynamicIcon } from './IconPicker';
+import { X, DollarSign, Calendar, Tag, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 
 const getTodayLocalDateStr = () => {
   const now = new Date();

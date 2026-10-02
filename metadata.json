@@ -1,0 +1,8 @@
+{
+  "name": "FinVue",
+  "description": "Cross-platform dark-mode budgeting application with passcode protection, category customization, month-over-month comparative analytics, and multi-device cloud sync.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

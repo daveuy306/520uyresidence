@@ -12,7 +12,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { Calendar, TrendingUp, TrendingDown, DollarSign } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { DynamicIcon } from './IconPicker';
 
 export default function Analytics({ transactions, categories }) {

@@ -19,7 +19,6 @@ import {
 import { subscribeToCloudData, saveCloudData } from './utils/firebase';
 import {
   startCrossDeviceSyncSubscriber,
-  pushLocalDataToCloud,
   initializeCloudSync,
   mutateAndSyncCloudData,
   recordDeletedTxId,

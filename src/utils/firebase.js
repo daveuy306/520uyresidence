@@ -8,12 +8,12 @@ import {
 
 // Default Firebase configuration using environment variables or fallback configuration
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDummyKeyForBudgetApp520",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "budgeting-app-uy520.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "budgeting-app-uy520",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "budgeting-app-uy520.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "520520520520",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:520520520520:web:abc123def456"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyAMkglitYBIV0UdvjjpOBRyqVgYYHaVM3A",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "expense-tracker-6048a.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "expense-tracker-6048a",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "expense-tracker-6048a.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "265558693099",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:265558693099:web:8b94c4532f11555996daae"
 };
 
 let db = null;

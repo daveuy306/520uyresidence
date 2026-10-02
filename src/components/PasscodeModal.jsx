@@ -16,17 +16,6 @@ export default function PasscodeModal({ onAuthenticate, isUnlocking }) {
     }
   };
 
-  // Allow native keyboard typing for desktop and mobile touch keyboards
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Enter') {
-        handleSubmit();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [passcode]);
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f12]/95 backdrop-blur-md p-4 transition-all">
       <div
