@@ -21,6 +21,7 @@ import {
   startCrossDeviceSyncSubscriber,
   pushLocalDataToCloud,
   initializeCloudSync,
+  mutateAndSyncCloudData,
   recordDeletedTxId,
   isValidAppData,
 } from './utils/syncEngine';
@@ -42,18 +43,16 @@ export default function App() {
     stateRef.current = { categories, transactions };
   }, [categories, transactions]);
 
-  // Initial Sync on launch: Fetch remote data, merge with local data, and update remote
+  // Initial Sync on launch: Remote cloud is source of truth
   useEffect(() => {
-    if (categories && transactions) {
-      initializeCloudSync(categories, transactions).then((synced) => {
-        if (synced && synced.categories && synced.transactions) {
-          setCategories(synced.categories);
-          saveStoredCategories(synced.categories);
-          setTransactions(synced.transactions);
-          saveStoredTransactions(synced.transactions);
-        }
-      });
-    }
+    initializeCloudSync(categories, transactions).then((synced) => {
+      if (synced && synced.categories && synced.transactions) {
+        setCategories(synced.categories);
+        saveStoredCategories(synced.categories);
+        setTransactions(synced.transactions);
+        saveStoredTransactions(synced.transactions);
+      }
+    });
   }, []);
 
   // Cross-device cloud sync subscriber
@@ -91,30 +90,38 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
-  // Sync to local storage, global cloud, and optional Google Sheets
-  const handleSaveCategories = (newCategories) => {
+  const handleSaveCategories = async (newCategories) => {
     if (!newCategories || !Array.isArray(newCategories.income) || !Array.isArray(newCategories.expense)) return;
+
     setCategories(newCategories);
     saveStoredCategories(newCategories);
-    saveCloudData(newCategories, transactions);
-    pushLocalDataToCloud(newCategories, transactions);
-  };
 
-  const handleSaveTransactions = (newTransactions) => {
-    if (!Array.isArray(newTransactions)) return;
-    setTransactions(newTransactions);
-    saveStoredTransactions(newTransactions);
-    saveCloudData(categories, newTransactions);
-    pushLocalDataToCloud(categories, newTransactions);
+    const synced = await mutateAndSyncCloudData(
+      (liveCat, liveTx) => ({
+        categories: newCategories,
+        transactions: liveTx || transactions
+      }),
+      newCategories,
+      transactions
+    );
 
-    // Auto-sync to Google Sheets if enabled
-    if (getAutoSyncSheets()) {
-      syncToGoogleSheets(newTransactions, categories).catch(() => {});
+    if (synced) {
+      saveCloudData(synced.categories, synced.transactions);
     }
   };
 
   const handleAuthenticate = () => {
     setIsUnlocking(true);
+    // Fetch live shared cloud data immediately upon passcode unlock
+    initializeCloudSync(categories, transactions).then((synced) => {
+      if (synced && synced.categories && synced.transactions) {
+        setCategories(synced.categories);
+        saveStoredCategories(synced.categories);
+        setTransactions(synced.transactions);
+        saveStoredTransactions(synced.transactions);
+      }
+    });
+
     setTimeout(() => {
       setIsAuthenticated(true);
       setAuthStatus(true);
@@ -131,21 +138,68 @@ export default function App() {
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
 
-  const handleAddOrUpdateTransaction = (txData) => {
-    let updated;
-    if (editingTransaction) {
-      updated = transactions.map((t) => (t.id === txData.id ? txData : t));
-    } else {
-      updated = [txData, ...transactions];
+  const handleAddOrUpdateTransaction = async (txData) => {
+    setIsTxModalOpen(false);
+
+    // Perform atomic cloud mutation so latest transactions from other devices are preserved
+    const synced = await mutateAndSyncCloudData(
+      (liveCat, liveTx) => {
+        let updated;
+        const currentTxList = Array.isArray(liveTx) ? liveTx : transactions;
+        const exists = currentTxList.some((t) => t.id === txData.id);
+
+        if (exists || editingTransaction) {
+          updated = currentTxList.map((t) => (t.id === txData.id ? txData : t));
+        } else {
+          updated = [txData, ...currentTxList];
+        }
+
+        return {
+          categories: liveCat || categories,
+          transactions: updated
+        };
+      },
+      categories,
+      transactions
+    );
+
+    if (synced) {
+      setTransactions(synced.transactions);
+      saveStoredTransactions(synced.transactions);
+      saveCloudData(categories, synced.transactions);
+
+      if (getAutoSyncSheets()) {
+        syncToGoogleSheets(synced.transactions, categories).catch(() => {});
+      }
     }
-    handleSaveTransactions(updated);
+
     setEditingTransaction(null);
   };
 
-  const handleDeleteTransaction = (id) => {
+  const handleDeleteTransaction = async (id) => {
     recordDeletedTxId(id);
-    const updated = transactions.filter((t) => t.id !== id);
-    handleSaveTransactions(updated);
+
+    const synced = await mutateAndSyncCloudData(
+      (liveCat, liveTx) => {
+        const currentTxList = Array.isArray(liveTx) ? liveTx : transactions;
+        return {
+          categories: liveCat || categories,
+          transactions: currentTxList.filter((t) => t.id !== id)
+        };
+      },
+      categories,
+      transactions
+    );
+
+    if (synced) {
+      setTransactions(synced.transactions);
+      saveStoredTransactions(synced.transactions);
+      saveCloudData(categories, synced.transactions);
+
+      if (getAutoSyncSheets()) {
+        syncToGoogleSheets(synced.transactions, categories).catch(() => {});
+      }
+    }
   };
 
   const handleOpenAddModal = () => {
@@ -158,13 +212,22 @@ export default function App() {
     setIsTxModalOpen(true);
   };
 
-  const handleResetData = () => {
-    if (confirm('Are you sure you want to reset all transactions and categories to default sample data?')) {
+  const handleResetData = async () => {
+    if (confirm('Are you sure you want to reset all transactions and categories to default sample data across all devices?')) {
       const reset = resetDataToDefaults();
       setCategories(reset.categories);
       setTransactions(reset.transactions);
+
+      await mutateAndSyncCloudData(
+        () => ({
+          categories: reset.categories,
+          transactions: reset.transactions
+        }),
+        reset.categories,
+        reset.transactions
+      );
+
       saveCloudData(reset.categories, reset.transactions);
-      pushLocalDataToCloud(reset.categories, reset.transactions);
     }
   };
 
