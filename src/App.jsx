@@ -22,6 +22,7 @@ import { RefreshCw, CloudCheck, Cloud, FileSpreadsheet } from 'lucide-react';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => getAuthStatus());
+  const [isUnlocking, setIsUnlocking] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'transactions', 'analytics', 'categories'
   const [categories, setCategories] = useState(() => getStoredCategories());
   const [transactions, setTransactions] = useState(() => getStoredTransactions());
@@ -65,8 +66,12 @@ export default function App() {
   };
 
   const handleAuthenticate = () => {
-    setIsAuthenticated(true);
-    setAuthStatus(true);
+    setIsUnlocking(true);
+    setTimeout(() => {
+      setIsAuthenticated(true);
+      setAuthStatus(true);
+      setIsUnlocking(false);
+    }, 400);
   };
 
   const handleLogout = () => {
@@ -115,12 +120,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0d0f12] text-slate-100 flex flex-col md:flex-row">
-      {/* Passcode Lock Screen */}
-      {!isAuthenticated && <PasscodeModal onAuthenticate={handleAuthenticate} />}
+      {/* Passcode Lock Screen with Smooth Unlock Animation */}
+      {!isAuthenticated && (
+        <PasscodeModal
+          onAuthenticate={handleAuthenticate}
+          isUnlocking={isUnlocking}
+        />
+      )}
 
       {/* Authenticated Application UI */}
       {isAuthenticated && (
-        <>
+        <div className="flex-1 flex flex-col md:flex-row w-full animate-fade-in">
           {/* Responsive Navigation Side/Bottom */}
           <Navigation
             activeTab={activeTab}
@@ -140,7 +150,7 @@ export default function App() {
 
                 <button
                   onClick={() => setIsSheetsModalOpen(true)}
-                  className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 transition px-3 py-1.5 rounded-xl font-medium"
+                  className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 hover:bg-emerald-500/20 active:scale-[0.98] transition px-3 py-1.5 rounded-xl font-medium"
                 >
                   <FileSpreadsheet className="w-4 h-4" /> Google Sheets
                 </button>
@@ -148,44 +158,46 @@ export default function App() {
 
               <button
                 onClick={handleResetData}
-                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition px-2.5 py-1.5 rounded-xl bg-[#161920] border border-slate-800"
+                className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-300 transition px-2.5 py-1.5 rounded-xl bg-[#161920] border border-slate-800 active:scale-[0.98]"
                 title="Reset sample data"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Reset Demo Data
               </button>
             </div>
 
-            {/* Active View Switcher */}
-            {activeTab === 'dashboard' && (
-              <Dashboard
-                transactions={transactions}
-                categories={categories}
-                onOpenAddModal={handleOpenAddModal}
-                onEditTransaction={handleOpenEditModal}
-                onViewAll={() => setActiveTab('transactions')}
-              />
-            )}
+            {/* Active View Switcher with Slide Animation */}
+            <div key={activeTab} className="animate-slide-up">
+              {activeTab === 'dashboard' && (
+                <Dashboard
+                  transactions={transactions}
+                  categories={categories}
+                  onOpenAddModal={handleOpenAddModal}
+                  onEditTransaction={handleOpenEditModal}
+                  onViewAll={() => setActiveTab('transactions')}
+                />
+              )}
 
-            {activeTab === 'transactions' && (
-              <TransactionList
-                transactions={transactions}
-                categories={categories}
-                onEdit={handleOpenEditModal}
-                onDelete={handleDeleteTransaction}
-                onAddNew={handleOpenAddModal}
-              />
-            )}
+              {activeTab === 'transactions' && (
+                <TransactionList
+                  transactions={transactions}
+                  categories={categories}
+                  onEdit={handleOpenEditModal}
+                  onDelete={handleDeleteTransaction}
+                  onAddNew={handleOpenAddModal}
+                />
+              )}
 
-            {activeTab === 'analytics' && (
-              <Analytics transactions={transactions} categories={categories} />
-            )}
+              {activeTab === 'analytics' && (
+                <Analytics transactions={transactions} categories={categories} />
+              )}
 
-            {activeTab === 'categories' && (
-              <CategoriesManager
-                categories={categories}
-                onSaveCategories={handleSaveCategories}
-              />
-            )}
+              {activeTab === 'categories' && (
+                <CategoriesManager
+                  categories={categories}
+                  onSaveCategories={handleSaveCategories}
+                />
+              )}
+            </div>
 
             {/* Add / Edit Transaction Modal */}
             <TransactionModal
@@ -204,7 +216,7 @@ export default function App() {
               categories={categories}
             />
           </main>
-        </>
+        </div>
       )}
     </div>
   );

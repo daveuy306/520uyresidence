@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Lock, Eye, EyeOff, ShieldCheck, KeyRound } from 'lucide-react';
 import { verifyPasscode } from '../utils/storage';
 
-export default function PasscodeModal({ onAuthenticate }) {
+export default function PasscodeModal({ onAuthenticate, isUnlocking }) {
   const [passcode, setPasscode] = useState('');
   const [error, setError] = useState(false);
   const [showPasscode, setShowPasscode] = useState(false);
@@ -28,8 +28,12 @@ export default function PasscodeModal({ onAuthenticate }) {
   }, [passcode]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f12]/95 backdrop-blur-md p-4">
-      <div className="w-full max-w-sm bg-[#161920] border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col items-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0d0f12]/95 backdrop-blur-md p-4 transition-all">
+      <div
+        className={`w-full max-w-sm bg-[#161920] border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col items-center transition-all ${
+          isUnlocking ? 'animate-unlock' : 'animate-scale-up'
+        }`}
+      >
         {/* Header Icon */}
         <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-4 shadow-inner">
           <ShieldCheck className="w-8 h-8" />

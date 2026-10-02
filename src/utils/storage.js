@@ -31,7 +31,10 @@ const generateSeedTransactions = () => {
 
   const getDateStr = (monthOffset, day) => {
     const d = new Date(currentYear, currentMonth + monthOffset, day);
-    return d.toISOString().split('T')[0];
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
   };
 
   return [
