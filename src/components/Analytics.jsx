@@ -20,6 +20,19 @@ export default function Analytics({ transactions, categories }) {
   const currentYear = currentMonthDate.getFullYear();
   const currentMonth = currentMonthDate.getMonth();
 
+  // Helper function to safely parse YYYY-MM-DD into local Date
+  const parseTxDate = (dateStr) => {
+    if (!dateStr) return new Date();
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      return new Date(year, month, day);
+    }
+    return new Date(dateStr);
+  };
+
   // 1. Month-over-Month Comparison Data (Last 6 Months)
   const monthlyComparisonData = useMemo(() => {
     const monthMap = {};
@@ -39,13 +52,14 @@ export default function Analytics({ transactions, categories }) {
     }
 
     transactions.forEach((tx) => {
-      const d = new Date(tx.date);
+      const amt = Number(tx.amount) || 0;
+      const d = parseTxDate(tx.date);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (monthMap[key]) {
         if (tx.type === 'income') {
-          monthMap[key].Income += tx.amount;
+          monthMap[key].Income += amt;
         } else {
-          monthMap[key].Expense += tx.amount;
+          monthMap[key].Expense += amt;
         }
       }
     });
@@ -64,14 +78,15 @@ export default function Analytics({ transactions, categories }) {
     let totalMonthExpense = 0;
 
     transactions.forEach((tx) => {
-      const d = new Date(tx.date);
+      const amt = Number(tx.amount) || 0;
+      const d = parseTxDate(tx.date);
       if (
         tx.type === 'expense' &&
         d.getFullYear() === currentYear &&
         d.getMonth() === currentMonth
       ) {
-        categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + tx.amount;
-        totalMonthExpense += tx.amount;
+        categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + amt;
+        totalMonthExpense += amt;
       }
     });
 
