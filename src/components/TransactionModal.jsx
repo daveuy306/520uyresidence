@@ -2,12 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { X, DollarSign, Calendar, Tag, FileText, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { DynamicIcon } from './IconPicker';
 
+const getTodayLocalDateStr = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export default function TransactionModal({ isOpen, onClose, onSave, editingTransaction, categories }) {
   const [type, setType] = useState('expense');
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(getTodayLocalDateStr);
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
@@ -16,7 +24,7 @@ export default function TransactionModal({ isOpen, onClose, onSave, editingTrans
       setTitle(editingTransaction.title || '');
       setAmount(editingTransaction.amount?.toString() || '');
       setCategory(editingTransaction.category || '');
-      setDate(editingTransaction.date || new Date().toISOString().split('T')[0]);
+      setDate(editingTransaction.date || getTodayLocalDateStr());
       setNotes(editingTransaction.notes || '');
     } else {
       // Reset for new transaction
@@ -25,7 +33,7 @@ export default function TransactionModal({ isOpen, onClose, onSave, editingTrans
       setAmount('');
       const defaultCategoryList = categories.expense || [];
       setCategory(defaultCategoryList[0]?.name || '');
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(getTodayLocalDateStr());
       setNotes('');
     }
   }, [editingTransaction, isOpen, categories]);

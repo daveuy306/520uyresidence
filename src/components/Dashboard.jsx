@@ -7,6 +7,19 @@ export default function Dashboard({ transactions, categories, onOpenAddModal, on
   const currentYear = currentMonthDate.getFullYear();
   const currentMonth = currentMonthDate.getMonth();
 
+  // Helper function to safely parse YYYY-MM-DD into local Date
+  const parseTxDate = (dateStr) => {
+    if (!dateStr) return new Date();
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      return new Date(year, month, day);
+    }
+    return new Date(dateStr);
+  };
+
   // Compute metrics for current month & overall
   const stats = useMemo(() => {
     let currentIncome = 0;
@@ -15,15 +28,16 @@ export default function Dashboard({ transactions, categories, onOpenAddModal, on
     let totalExpense = 0;
 
     transactions.forEach((tx) => {
-      const d = new Date(tx.date);
+      const amt = Number(tx.amount) || 0;
+      const d = parseTxDate(tx.date);
       const isCurrentMonth = d.getFullYear() === currentYear && d.getMonth() === currentMonth;
 
       if (tx.type === 'income') {
-        totalIncome += tx.amount;
-        if (isCurrentMonth) currentIncome += tx.amount;
+        totalIncome += amt;
+        if (isCurrentMonth) currentIncome += amt;
       } else {
-        totalExpense += tx.amount;
-        if (isCurrentMonth) currentExpense += tx.amount;
+        totalExpense += amt;
+        if (isCurrentMonth) currentExpense += amt;
       }
     });
 
@@ -51,7 +65,7 @@ export default function Dashboard({ transactions, categories, onOpenAddModal, on
   // Recent 5 transactions
   const recentTransactions = useMemo(() => {
     return [...transactions]
-      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .sort((a, b) => parseTxDate(b.date) - parseTxDate(a.date))
       .slice(0, 5);
   }, [transactions]);
 
@@ -192,7 +206,7 @@ export default function Dashboard({ transactions, categories, onOpenAddModal, on
                         isExpense ? 'text-rose-400' : 'text-emerald-400'
                       }`}
                     >
-                      {isExpense ? '-' : '+'} ${parseFloat(tx.amount).toFixed(2)}
+                      {isExpense ? '-' : '+'} ${Number(tx.amount).toFixed(2)}
                     </span>
                   </div>
                 </div>
