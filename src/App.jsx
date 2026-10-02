@@ -17,6 +17,7 @@ import {
   resetDataToDefaults,
 } from './utils/storage';
 import { subscribeToCloudData, saveCloudData } from './utils/firebase';
+import { startCrossDeviceSyncSubscriber, pushLocalDataToCloud } from './utils/syncEngine';
 import { getAutoSyncSheets, syncToGoogleSheets } from './utils/googleSheets';
 import { RefreshCw, CloudCheck, Cloud, FileSpreadsheet } from 'lucide-react';
 
@@ -26,13 +27,14 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'transactions', 'analytics', 'categories'
   const [categories, setCategories] = useState(() => getStoredCategories());
   const [transactions, setTransactions] = useState(() => getStoredTransactions());
-  const [isCloudSynced, setIsCloudSynced] = useState(false);
+  const [isCloudSynced, setIsCloudSynced] = useState(true);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
 
-  // Subscribe to real-time Firebase Cloud Sync across devices
+  // Cross-device cloud sync subscriber
   useEffect(() => {
     if (isAuthenticated) {
-      const unsubscribe = subscribeToCloudData((data) => {
+      // 1. Firebase listener
+      const unsubscribeFirebase = subscribeToCloudData((data) => {
         if (data.categories) {
           setCategories(data.categories);
           saveStoredCategories(data.categories);
@@ -43,21 +45,40 @@ export default function App() {
         }
         setIsCloudSynced(true);
       });
-      return () => unsubscribe();
+
+      // 2. Global REST multi-device sync engine
+      const unsubscribeEngine = startCrossDeviceSyncSubscriber((remote) => {
+        if (remote.categories) {
+          setCategories(remote.categories);
+          saveStoredCategories(remote.categories);
+        }
+        if (remote.transactions) {
+          setTransactions(remote.transactions);
+          saveStoredTransactions(remote.transactions);
+        }
+        setIsCloudSynced(true);
+      });
+
+      return () => {
+        unsubscribeFirebase();
+        unsubscribeEngine();
+      };
     }
   }, [isAuthenticated]);
 
-  // Sync to local storage, Firebase cloud, and optional Google Sheets
+  // Sync to local storage, global multi-device cloud, and optional Google Sheets
   const handleSaveCategories = (newCategories) => {
     setCategories(newCategories);
     saveStoredCategories(newCategories);
     saveCloudData(newCategories, transactions);
+    pushLocalDataToCloud(newCategories, transactions);
   };
 
   const handleSaveTransactions = (newTransactions) => {
     setTransactions(newTransactions);
     saveStoredTransactions(newTransactions);
     saveCloudData(categories, newTransactions);
+    pushLocalDataToCloud(categories, newTransactions);
 
     // Auto-sync to Google Sheets if enabled
     if (getAutoSyncSheets()) {
@@ -115,6 +136,7 @@ export default function App() {
       setCategories(reset.categories);
       setTransactions(reset.transactions);
       saveCloudData(reset.categories, reset.transactions);
+      pushLocalDataToCloud(reset.categories, reset.transactions);
     }
   };
 
@@ -145,7 +167,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5 text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1.5 rounded-xl">
                   {isCloudSynced ? <CloudCheck className="w-4 h-4 text-emerald-400" /> : <Cloud className="w-4 h-4 text-indigo-400" />}
-                  <span className="font-medium">Firebase Cloud Sync</span>
+                  <span className="font-medium">Multi-Device Cloud Sync Active</span>
                 </div>
 
                 <button
