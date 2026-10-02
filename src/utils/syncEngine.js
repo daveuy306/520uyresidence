@@ -33,42 +33,6 @@ export function isValidAppData(data) {
   return true;
 }
 
-// Merge datasets respecting deleted transaction IDs
-export function mergeTransactions(local = [], remote = []) {
-  const deletedIds = new Set(getDeletedTxIds());
-  const map = new Map();
-
-  // Process local
-  (local || []).forEach((tx) => {
-    if (tx && tx.id && !deletedIds.has(tx.id)) {
-      map.set(tx.id, tx);
-    }
-  });
-
-  // Process remote
-  (remote || []).forEach((tx) => {
-    if (tx && tx.id && !deletedIds.has(tx.id)) {
-      map.set(tx.id, tx);
-    }
-  });
-
-  return Array.from(map.values());
-}
-
-export function mergeCategories(localCat, remoteCat) {
-  const mergeCategoryList = (localList = [], remoteList = []) => {
-    const map = new Map();
-    localList.forEach(c => c && c.id && map.set(c.id, c));
-    remoteList.forEach(c => c && c.id && map.set(c.id, c));
-    return Array.from(map.values());
-  };
-
-  return {
-    income: mergeCategoryList(localCat?.income, remoteCat?.income),
-    expense: mergeCategoryList(localCat?.expense, remoteCat?.expense)
-  };
-}
-
 // Fetch remote data from family cloud endpoint
 export async function fetchRemoteCloudData() {
   try {
@@ -119,46 +83,62 @@ export async function pushLocalDataToCloud(categories, transactions) {
   return false;
 }
 
-// Initial Family Sync on startup: Fetch remote family data, merge local entries, and sync back
+// Atomic Cloud Mutation Helper:
+// Fetches the live remote state, applies mutationFn, and uploads updated state to cloud
+export async function mutateAndSyncCloudData(mutationFn, fallbackCategories, fallbackTransactions) {
+  let liveCategories = fallbackCategories;
+  let liveTransactions = fallbackTransactions;
+
+  const remote = await fetchRemoteCloudData();
+  if (remote && isValidAppData(remote)) {
+    liveCategories = remote.categories;
+    liveTransactions = remote.transactions;
+  }
+
+  const mutated = mutationFn(liveCategories, liveTransactions);
+  if (mutated && mutated.categories && Array.isArray(mutated.transactions)) {
+    await pushLocalDataToCloud(mutated.categories, mutated.transactions);
+    return mutated;
+  }
+  return null;
+}
+
+// Initial Family Sync on startup/unlock: Remote cloud data is the single source of truth when present
 export async function initializeCloudSync(localCategories, localTransactions) {
   const remote = await fetchRemoteCloudData();
-  if (remote) {
-    const mergedTx = mergeTransactions(localTransactions, remote.transactions);
-    const mergedCat = mergeCategories(localCategories, remote.categories);
-    // Push back merged family data
-    await pushLocalDataToCloud(mergedCat, mergedTx);
-    return { categories: mergedCat, transactions: mergedTx };
+  if (remote && isValidAppData(remote)) {
+    // Shared cloud data is the primary truth across all family devices
+    lastSyncedTimestamp = remote.updatedAt || new Date().toISOString();
+    return {
+      categories: remote.categories,
+      transactions: remote.transactions
+    };
   } else {
-    // Remote is empty, initialize cloud with local data
+    // Cloud is uninitialized or offline, seed cloud with local data
     await pushLocalDataToCloud(localCategories, localTransactions);
     return { categories: localCategories, transactions: localTransactions };
   }
 }
 
-// Subscriber to automatically fetch and merge multi-device updates across all family devices
+// Subscriber to automatically fetch multi-device updates across all family devices
 export function startCrossDeviceSyncSubscriber(getLocalState, onRemoteDataReceived) {
   let intervalId = null;
 
   const checkForUpdates = async () => {
     const remote = await fetchRemoteCloudData();
-    const { categories: localCategories, transactions: localTransactions } = getLocalState();
-
-    if (!remote) return;
-
-    const mergedTx = mergeTransactions(localTransactions, remote.transactions);
-    const mergedCat = mergeCategories(localCategories, remote.categories);
+    if (!remote || !isValidAppData(remote)) return;
 
     if (!lastSyncedTimestamp || (remote.updatedAt && remote.updatedAt > lastSyncedTimestamp)) {
       lastSyncedTimestamp = remote.updatedAt;
       onRemoteDataReceived({
-        categories: mergedCat,
-        transactions: mergedTx
+        categories: remote.categories,
+        transactions: remote.transactions
       });
     }
   };
 
-  // Poll family cloud endpoint every 2.5 seconds
-  intervalId = setInterval(checkForUpdates, 2500);
+  // Poll family cloud endpoint every 1.5 seconds for instant updates
+  intervalId = setInterval(checkForUpdates, 1500);
 
   const handleVisibilityOrFocus = () => {
     if (document.visibilityState === 'visible') {
