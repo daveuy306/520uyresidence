@@ -1,6 +1,7 @@
-// Multi-Device Cloud Synchronization Engine for Luxe Budget App
-const GLOBAL_SYNC_ID = "ff808181a09d98f701a0fbb3666a5f58";
-const GLOBAL_SYNC_URL = `https://api.restful-api.dev/objects/${GLOBAL_SYNC_ID}`;
+// Family Multi-Device Cloud Synchronization Engine for Luxe Budget App
+// Dedicated Shared Cloud Storage Endpoint across all devices
+const FAMILY_SYNC_ID = "ff808181a09d98f701a0fd4d71696348";
+const FAMILY_SYNC_URL = `https://api.restful-api.dev/objects/${FAMILY_SYNC_ID}`;
 
 let lastSyncedTimestamp = null;
 const DELETED_IDS_KEY = 'luxe_budget_deleted_tx_ids';
@@ -22,7 +23,7 @@ export function recordDeletedTxId(id) {
   }
 }
 
-// Validate remote data structure
+// Validate remote data structure to ensure app stability
 export function isValidAppData(data) {
   if (!data || typeof data !== 'object') return false;
   const categories = data.categories;
@@ -68,10 +69,10 @@ export function mergeCategories(localCat, remoteCat) {
   };
 }
 
-// Fetch remote data
+// Fetch remote data from family cloud endpoint
 export async function fetchRemoteCloudData() {
   try {
-    const res = await fetch(GLOBAL_SYNC_URL, {
+    const res = await fetch(FAMILY_SYNC_URL, {
       method: 'GET',
       headers: { 'Accept': 'application/json' },
       cache: 'no-store'
@@ -87,7 +88,7 @@ export async function fetchRemoteCloudData() {
   return null;
 }
 
-// Push local data to global cloud endpoint
+// Push local data to family cloud endpoint so every device receives inputs instantly
 export async function pushLocalDataToCloud(categories, transactions) {
   if (!categories || !Array.isArray(categories.income) || !Array.isArray(categories.expense)) {
     return false;
@@ -97,7 +98,7 @@ export async function pushLocalDataToCloud(categories, transactions) {
   lastSyncedTimestamp = timestamp;
 
   const payload = {
-    name: "Luxe Budget Shared Storage",
+    name: "Luxe Family Shared Budget Storage",
     data: {
       categories,
       transactions: Array.isArray(transactions) ? transactions : [],
@@ -106,7 +107,7 @@ export async function pushLocalDataToCloud(categories, transactions) {
   };
 
   try {
-    const res = await fetch(GLOBAL_SYNC_URL, {
+    const res = await fetch(FAMILY_SYNC_URL, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -118,23 +119,23 @@ export async function pushLocalDataToCloud(categories, transactions) {
   return false;
 }
 
-// Initial Sync: Fetch remote first, merge local entries, update remote
+// Initial Family Sync on startup: Fetch remote family data, merge local entries, and sync back
 export async function initializeCloudSync(localCategories, localTransactions) {
   const remote = await fetchRemoteCloudData();
   if (remote) {
     const mergedTx = mergeTransactions(localTransactions, remote.transactions);
     const mergedCat = mergeCategories(localCategories, remote.categories);
-    // Push back merged view
+    // Push back merged family data
     await pushLocalDataToCloud(mergedCat, mergedTx);
     return { categories: mergedCat, transactions: mergedTx };
   } else {
-    // Remote is empty, push local
+    // Remote is empty, initialize cloud with local data
     await pushLocalDataToCloud(localCategories, localTransactions);
     return { categories: localCategories, transactions: localTransactions };
   }
 }
 
-// Subscriber to automatically fetch and merge multi-device updates
+// Subscriber to automatically fetch and merge multi-device updates across all family devices
 export function startCrossDeviceSyncSubscriber(getLocalState, onRemoteDataReceived) {
   let intervalId = null;
 
@@ -156,7 +157,8 @@ export function startCrossDeviceSyncSubscriber(getLocalState, onRemoteDataReceiv
     }
   };
 
-  intervalId = setInterval(checkForUpdates, 3000);
+  // Poll family cloud endpoint every 2.5 seconds
+  intervalId = setInterval(checkForUpdates, 2500);
 
   const handleVisibilityOrFocus = () => {
     if (document.visibilityState === 'visible') {
