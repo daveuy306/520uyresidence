@@ -17,7 +17,13 @@ import {
   resetDataToDefaults,
 } from './utils/storage';
 import { subscribeToCloudData, saveCloudData } from './utils/firebase';
-import { startCrossDeviceSyncSubscriber, pushLocalDataToCloud, isValidAppData } from './utils/syncEngine';
+import {
+  startCrossDeviceSyncSubscriber,
+  pushLocalDataToCloud,
+  initializeCloudSync,
+  recordDeletedTxId,
+  isValidAppData,
+} from './utils/syncEngine';
 import { getAutoSyncSheets, syncToGoogleSheets } from './utils/googleSheets';
 import { RefreshCw, CloudCheck, Cloud, FileSpreadsheet } from 'lucide-react';
 
@@ -30,16 +36,30 @@ export default function App() {
   const [isCloudSynced, setIsCloudSynced] = useState(true);
   const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
 
-  // Refs for current state to allow syncEngine getter
+  // Keep ref up to date for syncEngine getters
   const stateRef = useRef({ categories, transactions });
   useEffect(() => {
     stateRef.current = { categories, transactions };
   }, [categories, transactions]);
 
-  // Cross-device cloud sync subscriber with strict schema validation
+  // Initial Sync on launch: Fetch remote data, merge with local data, and update remote
+  useEffect(() => {
+    if (categories && transactions) {
+      initializeCloudSync(categories, transactions).then((synced) => {
+        if (synced && synced.categories && synced.transactions) {
+          setCategories(synced.categories);
+          saveStoredCategories(synced.categories);
+          setTransactions(synced.transactions);
+          saveStoredTransactions(synced.transactions);
+        }
+      });
+    }
+  }, []);
+
+  // Cross-device cloud sync subscriber
   useEffect(() => {
     if (isAuthenticated) {
-      // 1. Firebase listener with schema validation
+      // 1. Firebase Firestore listener
       const unsubscribeFirebase = subscribeToCloudData((data) => {
         if (isValidAppData(data)) {
           setCategories(data.categories);
@@ -50,7 +70,7 @@ export default function App() {
         }
       });
 
-      // 2. Multi-tab/device sync engine with schema validation
+      // 2. Global REST multi-device sync engine (syncs all devices accessing the app)
       const unsubscribeEngine = startCrossDeviceSyncSubscriber(
         () => stateRef.current,
         (remote) => {
@@ -123,6 +143,7 @@ export default function App() {
   };
 
   const handleDeleteTransaction = (id) => {
+    recordDeletedTxId(id);
     const updated = transactions.filter((t) => t.id !== id);
     handleSaveTransactions(updated);
   };
